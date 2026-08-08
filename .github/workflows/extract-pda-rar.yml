@@ -1,89 +1,72 @@
-name: Extract PDA By Slicer archives
+name: PokeTag Frankenstein integration
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/extract-pda-rar.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  extract:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Install RAR extractor
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y p7zip-full
-
-      - name: Extract every RAR under PDA-By-Slicer
+      - name: Inventory the three imported projects
         shell: bash
         run: |
           set -euo pipefail
-          ROOT='upstream/PDA-By-Slicer'
+          echo '=== TOP LEVEL ==='
+          find . -maxdepth 2 -mindepth 1 -type d | sort | head -200
 
-          if [ ! -d "$ROOT" ]; then
-            echo "Directory not found: $ROOT"
-            exit 1
-          fi
+          echo '=== PDA ARCHIVES / EXTRACTED ROOTS ==='
+          find upstream/PDA-By-Slicer -maxdepth 3 -type d | sort | head -250
 
-          total=0
-          pass=0
-          while true; do
-            pass=$((pass + 1))
-            found=0
+          echo '=== SERVER CONFIGS ==='
+          find upstream -type f \( -iname 'config.lua' -o -iname 'config.lua.dist' \) -print | sort
 
-            while IFS= read -r -d '' archive; do
-              found=1
-              total=$((total + 1))
-              destination="${archive%.*}"
-              echo "Extracting: $archive"
-              echo "Into:       $destination"
-              mkdir -p "$destination"
-              7z x -y "$archive" "-o$destination"
-              rm -f "$archive"
-            done < <(find "$ROOT" -type f -iname '*.rar' -print0)
+          echo '=== MAPS / DATABASES ==='
+          find upstream/PDA-By-Slicer upstream/poketibia-sirninja -type f \
+            \( -iname '*.otbm' -o -iname '*.s3db' -o -iname '*.sqlite' -o -iname '*.sql' \) \
+            -printf '%s %p\n' | sort -nr | head -120
 
-            if [ "$found" -eq 0 ]; then
-              break
-            fi
+          echo '=== PDA EXECUTABLES / CLIENT DATA ==='
+          find upstream/PDA-By-Slicer -type f \
+            \( -iname '*.exe' -o -iname '*.dat' -o -iname '*.spr' -o -iname '*.pic' \) \
+            -printf '%s %p\n' | sort -nr | head -120
 
-            if [ "$pass" -ge 10 ]; then
-              echo 'Too many nested archive passes; aborting for safety.'
-              exit 1
-            fi
+          echo '=== SERVER BUILD FILES ==='
+          find upstream/poketibia-sirninja -maxdepth 4 -type f \
+            \( -name 'Makefile*' -o -name 'CMakeLists.txt' -o -name 'configure*' -o -name 'autogen.sh' -o -name '*.vcxproj' \) \
+            -print | sort | head -120
+
+          echo '=== MODERN OTCLIENT BROWSER BUILD FILES ==='
+          find upstream/otclient-opentibiabr -maxdepth 4 -type f \
+            \( -name 'Dockerfile.browser*' -o -name 'CMakeLists.txt' -o -name 'init.lua' -o -iname '*emscripten*' \) \
+            -print | sort | head -160
+
+      - name: Inspect likely PDA 2.9 server configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t configs < <(find upstream/PDA-By-Slicer -type f -path '*Serv Full v2.9*' -iname 'config.lua' | sort)
+          echo "PDA 2.9 config count: ${#configs[@]}"
+          for cfg in "${configs[@]}"; do
+            echo "=== $cfg ==="
+            wc -c "$cfg"
+            sed -n '1,220p' "$cfg" || true
           done
 
-          echo "RAR archives extracted: $total"
-
-          echo 'Checking for files that GitHub will reject (>99 MB)...'
-          large_files="$(find "$ROOT" -type f -size +99M -print || true)"
-          if [ -n "$large_files" ]; then
-            echo 'The following extracted files exceed 99 MB:'
-            echo "$large_files"
-            echo 'Commit aborted. These files need Git LFS or another storage strategy.'
-            exit 1
-          fi
-
-      - name: Commit extracted files
+      - name: Basic repository integrity
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A upstream/PDA-By-Slicer
-
-          if git diff --cached --quiet; then
-            echo 'Nothing to commit.'
-            exit 0
-          fi
-
-          git commit -m 'chore: extract PDA By Slicer RAR archives'
-          git push origin HEAD:main
+          test -d upstream/PDA-By-Slicer
+          test -d upstream/poketibia-sirninja
+          test -d upstream/otclient-opentibiabr
+          echo 'All three project roots are present.'
