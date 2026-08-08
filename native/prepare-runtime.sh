@@ -23,10 +23,26 @@ chmod +x "$RUNTIME/theforgottenserver"
 cp -f "$SERVER_ROOT/config.lua" "$RUNTIME/config.lua"
 cp -f "$SERVER_ROOT/forgottenserver.s3db" "$RUNTIME/forgottenserver.s3db"
 
-# The datapack is large (the map alone is tens of MB). Use a runtime symlink so
-# CI/local startup does not duplicate it on every build. Runtime database/config
-# remain isolated copies and may be modified safely.
-ln -s "$SERVER_ROOT/data" "$RUNTIME/data"
+# Build an isolated directory tree without duplicating the large map. Hardlinks
+# are fast and cheap, while the separate directory structure lets us add Linux
+# case-compatibility aliases without changing the vendored historical datapack.
+if ! cp -al "$SERVER_ROOT/data" "$RUNTIME/data" 2>/dev/null; then
+  echo "[POKETAG-RUNTIME] Hardlink clone unavailable; falling back to normal copy."
+  rm -rf "$RUNTIME/data"
+  cp -a "$SERVER_ROOT/data" "$RUNTIME/data"
+fi
+
+# The original server was developed for Windows' case-insensitive filesystem.
+# Its XML asks for pokemon/system/... while the real folder is pokemon/System/.
+# Keep both spellings in the staged Linux runtime.
+if [[ -d "$RUNTIME/data/actions/scripts/pokemon/System" && ! -e "$RUNTIME/data/actions/scripts/pokemon/system" ]]; then
+  ln -s "System" "$RUNTIME/data/actions/scripts/pokemon/system"
+fi
+
+# Same issue for the Earthquake spell filename.
+if [[ -f "$RUNTIME/data/spells/scripts/poke/Earthquake.lua" && ! -e "$RUNTIME/data/spells/scripts/poke/earthquake.lua" ]]; then
+  ln -s "Earthquake.lua" "$RUNTIME/data/spells/scripts/poke/earthquake.lua"
+fi
 
 python3 - "$RUNTIME/config.lua" <<'PY'
 from pathlib import Path
@@ -57,4 +73,4 @@ say "Runtime staged at $RUNTIME"
 echo "  binary: $RUNTIME/theforgottenserver"
 echo "  config: $RUNTIME/config.lua"
 echo "  database: $RUNTIME/forgottenserver.s3db"
-echo "  datapack: $RUNTIME/data -> $SERVER_ROOT/data"
+echo "  datapack: isolated Linux-compatible tree at $RUNTIME/data"
