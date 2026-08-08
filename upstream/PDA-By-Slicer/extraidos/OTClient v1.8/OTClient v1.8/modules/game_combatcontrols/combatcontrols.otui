@@ -1,0 +1,53 @@
+CombatBox < UICheckBox
+  size: 20 20
+  image-clip: 0 0 20 20
+  anchors.top: parent.top
+  margin: 0 4
+  $first:
+    margin: 0 1
+  $last:
+    margin: 0 1
+
+  $checked:
+    image-clip: 0 20 20 20
+
+FightOffensiveBox < CombatBox
+  image-source: /game_combatcontrols/icons/fightoffensive.png
+FightBalancedBox < CombatBox
+  image-source: /game_combatcontrols/icons/fightbalanced.png
+FightDefensiveBox < CombatBox
+  image-source: /game_combatcontrols/icons/fightdefensive.png
+ChaseModeBox < CombatBox
+  image-source: /game_combatcontrols/icons/chasemode.png
+SafeFightBox < CombatBox
+  image-source: /game_combatcontrols/icons/safefight.png
+
+MiniWindow
+  id: combatControlsWindow
+  !text: tr('Combat Controls')
+  icon: combatcontrols.png
+  height: 48
+  &save: true
+  @onClose: modules.game_combatcontrols.onMiniWindowClose()
+
+  MiniWindowContents
+    FightOffensiveBox
+      id: fightOffensiveBox
+      anchors.left: parent.left
+      anchors.verticalCenter: parent.verticalCenter
+    FightBalancedBox
+      id: fightBalancedBox
+      anchors.left: prev.right
+      anchors.verticalCenter: parent.verticalCenter
+    FightDefensiveBox
+      id: fightDefensiveBox
+      anchors.left: prev.right
+      anchors.verticalCenter: parent.verticalCenter
+    ChaseModeBox
+      id: chaseModeBox
+      anchors.right: next.left
+      anchors.verticalCenter: parent.verticalCenter
+    SafeFightBox
+      id: safeFightBox
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter

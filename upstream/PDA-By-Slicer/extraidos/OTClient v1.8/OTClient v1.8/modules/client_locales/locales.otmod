@@ -1,0 +1,16 @@
+Module
+  name: client_locales
+  description: Translates texts to selected language
+  author: baxnie
+  website: www.otclient.info
+
+  dependencies:
+    - client_extended
+    - client_topmenu
+
+  @onLoad: |
+    dofile 'locales'
+    Locales.init()
+
+  @onUnload: |
+    Locales.terminate()

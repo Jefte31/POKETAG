@@ -1,0 +1,24 @@
+Module
+  name: gamelib
+  description: Contains game related classes
+  author: OTClient team
+  website: www.otclient.info
+
+  dependencies:
+    - client_extended
+    - game_tibiafiles
+
+  @onLoad: |
+    dofile 'const'
+    dofile 'protocol'
+    dofile 'protocollogin'
+    dofile 'protocolgame'
+    dofile 'game'
+
+    dofile 'creature'
+    dofile 'player'
+    dofile 'market'
+    dofile 'thing'
+    dofile 'spells'
+    
+    dofiles 'ui'

@@ -1,0 +1,174 @@
+HotkeyListLabel < UILabel
+  font: verdana-11px-monochrome
+  background-color: alpha
+  text-offset: 2 0
+  focusable: true
+  phantom: false
+
+  $focus:
+    background-color: #ffffff22
+
+MainWindow
+  id: hotkeysWindow
+  !text: tr('Hotkeys')
+  size: 340 460
+
+  @onEnter: modules.game_hotkeys.hide()
+  @onEscape: modules.game_hotkeys.hide()
+
+  Label
+    id: currentHotkeysLabel
+    !text: tr('Current hotkeys:')
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+
+  VerticalScrollBar
+    id: currentHotkeysScrollBar
+    height: 150
+    anchors.top: parent.top
+    anchors.right: parent.right
+    step: 14
+    pixels-scroll: true
+
+  TextList
+    id: currentHotkeys
+    vertical-scrollbar: currentHotkeysScrollBar
+    anchors.left: parent.left
+    anchors.right: prev.left
+    anchors.top: prev.top
+    anchors.bottom: prev.bottom
+    padding: 1
+    focusable: false
+
+  Label
+    !text: tr('Manage hotkeys:')
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-top: 10
+
+  Button
+    id: addHotkeyButton
+    !text: tr('Add')
+    width: 64
+    anchors.left: parent.left
+    anchors.top: prev.bottom
+    margin-top: 2
+    @onClick: modules.game_hotkeys.addHotkey()
+
+  Button
+    id: removeHotkeyButton
+    !text: tr('Remove')
+    width: 64
+    enabled: false
+    anchors.left: prev.right
+    anchors.top: prev.top
+    margin-left: 10
+    @onClick: modules.game_hotkeys.removeHotkey()
+
+  Label
+    id: hotKeyTextLabel
+    !text: tr('Edit hotkey text:')
+    enable: false
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-top: 20
+
+  TextEdit
+    id: hotkeyText
+    enabled: false
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    margin-bottom: 2
+    @onTextChange: modules.game_hotkeys.onHotkeyTextChange(self:getId(), self:getText())
+
+  CheckBox
+    id: sendAutomatically
+    !text: tr('Send automatically')
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    enabled:false
+    margin-top: 10
+    @onCheckChange: modules.game_hotkeys.setSendAutomatically(self:isChecked())
+
+  Item
+    id: itemPreview
+    anchors.left: parent.left
+    anchors.top: prev.bottom
+    margin-top: 10
+    virtual: true
+
+  Button
+    id: selectObjectButton
+    !text: tr('Select object')
+    width: 128
+    enabled: false
+    anchors.left: prev.right
+    anchors.top: prev.top
+    margin-left: 10
+    @onClick: modules.game_hotkeys.startChooseItem()
+
+  Button
+    id: clearObjectButton
+    !text: tr('Clear object')
+    width: 128
+    enabled: false
+    anchors.left: prev.left
+    anchors.right: prev.right
+    anchors.top: prev.bottom
+    margin-top: 2
+    @onClick: modules.game_hotkeys.clearObject()
+
+  ButtonBox
+    id: useOnSelf
+    !text: tr('Use on yourself')
+    width: 128
+    enabled: false
+    anchors.left: selectObjectButton.right
+    anchors.right: parent.right
+    anchors.top: selectObjectButton.top
+    checked: false
+    margin-left: 10
+    @onCheckChange: modules.game_hotkeys.changeUseType(HOTKEY_MANAGER_USEONSELF, self:isChecked())
+
+  ButtonBox
+    id: useOnTarget
+    !text: tr('Use on target')
+    width: 128
+    enabled: false
+    anchors.left: prev.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    checked: false
+    margin-top: 2
+    @onCheckChange: modules.game_hotkeys.changeUseType(HOTKEY_MANAGER_USEONTARGET, self:isChecked())
+
+  ButtonBox
+    id: useWith
+    !text: tr('With crosshair')
+    width: 128
+    enabled: false
+    anchors.left: prev.left
+    anchors.right: parent.right
+    anchors.top: prev.bottom
+    checked: false
+    margin-top: 2
+    @onCheckChange: modules.game_hotkeys.changeUseType(HOTKEY_MANAGER_USEWITH, self:isChecked())
+
+  HorizontalSeparator
+    id: separator
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: next.top
+    margin-bottom: 10
+
+  Button
+    !text: tr('Close')
+    width: 64
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    @onClick: modules.game_hotkeys.hide()

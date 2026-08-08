@@ -1,0 +1,8 @@
+Module
+  name: game_tibiafiles
+  description: Contains tibia spr and dat
+  reloadable: false
+  sandboxed: true
+  scripts: [tibiafiles.lua]
+  @onLoad: init()
+  @onUnload: terminate()

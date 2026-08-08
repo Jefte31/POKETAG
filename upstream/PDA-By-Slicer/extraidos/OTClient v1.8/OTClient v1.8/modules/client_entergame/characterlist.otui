@@ -1,0 +1,116 @@
+CharacterWidget < UIWidget
+  height: 14
+  focusable: true
+  background-color: alpha
+  @onFocusChange: |
+    local children = self:getChildren()
+    for i=1,#children do
+      children[i]:setOn(self:isFocused())
+    end
+
+  $focus:
+    background-color: #ffffff22
+
+  Label
+    id: name
+    color: #ffffff
+    anchors.top: parent.top
+    anchors.left: parent.left
+    font: verdana-11px-monochrome
+    text-auto-resize: true
+    background-color: alpha
+    text-offset: 2 0
+    on: true
+
+    $!on:
+      color: #aaaaaa
+
+  Label
+    id: worldName
+    color: #ffffff
+    anchors.top: parent.top
+    anchors.right: parent.right
+    margin-right: 5
+    font: verdana-11px-monochrome
+    text-auto-resize: true
+    background-color: alpha
+    &baseText: '(%s)'
+    on: true
+
+    $!on:
+      color: #aaaaaa
+
+MainWindow
+  id: charactersWindow
+  !text: tr('Character List')
+  size: 250 248
+  visible: false
+  @onEnter: CharacterList.doLogin()
+  @onEscape: CharacterList.destroy()
+  @onSetup: |
+    g_keyboard.bindKeyPress('Up', function() self:getChildById('characters'):focusPreviousChild(KeyboardFocusReason) end, self)
+    g_keyboard.bindKeyPress('Down', function() self:getChildById('characters'):focusNextChild(KeyboardFocusReason) end, self)
+
+  TextList
+    id: characters
+    anchors.top: parent.top
+    anchors.left: parent.left
+    anchors.right: characterListScrollBar.left
+    anchors.bottom: accountStatusLabel.top
+    margin-bottom: 5
+    padding: 1
+    focusable: false
+    vertical-scrollbar: characterListScrollBar
+
+  VerticalScrollBar
+    id: characterListScrollBar
+    anchors.top: parent.top
+    anchors.bottom: accountStatusLabel.top
+    anchors.right: parent.right
+    margin-bottom: 5
+    step: 14
+    pixels-scroll: true
+
+  Label
+    id: accountStatusLabel
+    !text: tr('Account Status:\nFree Account')
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: separator.top
+    margin-bottom: 5
+    text-auto-resize: true
+
+  HorizontalSeparator
+    id: separator
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.bottom: next.top
+    margin-bottom: 10
+
+  //CheckBox
+  // id: charAutoLoginBox
+  // !text: tr('Auto login')
+  // !tooltip: tr('Auto login selected character on next charlist load')
+  // anchors.left: parent.left
+  // anchors.right: parent.right
+  // anchors.bottom: next.top
+  // margin-bottom: 6
+  // margin-left: 18
+  // margin-right: 18
+
+  Button
+    id: buttonOk
+    !text: tr('Ok')
+    width: 64
+    anchors.right: next.left
+    anchors.bottom: parent.bottom
+    margin-right: 10
+    @onClick: CharacterList.doLogin()
+
+  Button
+    id: buttonCancel
+    !text: tr('Cancel')
+    width: 64
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    @onClick: CharacterList.destroy()

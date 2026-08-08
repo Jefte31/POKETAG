@@ -1,0 +1,26 @@
+Module
+  name: client
+  description: Initialize the client and setups its main window
+  author: edubart
+  website: www.otclient.info
+  reloadable: false
+
+  load-later:
+    - client_skins
+    - client_locales
+    //- client_particles
+    - client_topmenu
+    - client_background
+    //- client_about
+    - client_options
+    - client_terminal
+    - client_modulemanager
+    - client_entergame
+    - client_stats
+
+  @onLoad: |
+    dofile 'client'
+    Client.init()
+
+  @onUnload: |
+    Client.terminate()

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<npc name="Ticha  " speed="0">
+
+	<health now="1760" max="1760"/>
+
+	<look type="511" head="73" body="114" legs="95" feet="0"/>
+
+	<parameters>
+
+
+	</parameters>
+
+</npc>

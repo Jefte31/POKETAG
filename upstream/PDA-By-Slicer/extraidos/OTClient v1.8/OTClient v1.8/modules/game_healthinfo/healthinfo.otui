@@ -1,0 +1,92 @@
+HealthBar < ProgressBar
+  id: healthBar
+  height: 15
+  background-color: #ff4444
+  anchors.top: parent.top
+  anchors.left: parent.left
+  anchors.right: parent.right
+
+ManaBar < ProgressBar
+  id: manaBar
+  height: 15
+  background-color: #4444ff
+  anchors.top: prev.bottom
+  anchors.left: parent.left
+  anchors.right: parent.right
+  margin-top: 4
+
+HealthLabel < GameLabel
+  id: healthLabel
+  color: white
+  text-align: center
+  font: verdana-11px-rounded
+  anchors.fill: healthBar
+  margin-top: 2
+  text: 0 / 0
+
+ManaLabel < GameLabel
+  id: manaLabel
+  color: white
+  text-align: center
+  font: verdana-11px-rounded
+  anchors.fill: manaBar
+  margin-top: 2
+  text: 0 / 0
+
+CatchsLabel < GameLabel
+  id: CatchsLabel
+  text-align: right
+  color: white
+  font: verdana-11px-rounded
+  anchors.bottom: parent.bottom
+  anchors.right: parent.right
+  anchors.left: parent.horizontalCenter
+  margin-top: 5
+  margin-right: 3
+  text: Catchs:
+
+PokesLabel < GameLabel
+  id: PokesLabel
+  color: white
+  font: verdana-11px-rounded
+  anchors.bottom: parent.bottom
+  anchors.left: parent.left
+  anchors.right: parent.horizontalCenter
+  margin-top: 5
+  margin-left: 3
+  text: Pokes:
+
+ConditionWidget < UIWidget
+  size: 18 18
+
+  $!first:
+    margin-left: 2
+
+MiniWindow
+  icon: healthinfo.png
+  id: healthInfoWindow
+  !text: tr('Health Info')
+  height: 102
+  @onClose: modules.game_healthinfo.onMiniWindowClose()
+  &save: true
+
+  MiniWindowContents
+    HealthBar
+    HealthLabel
+    ManaBar
+    ManaLabel
+    Panel
+      id: conditionPanel
+      layout:
+        type: horizontalBox
+      height: 22
+      margin-top: 4
+      padding: 2
+      anchors.top: prev.bottom
+      anchors.left: parent.left
+      anchors.right: parent.right
+      border-width: 1
+      border-color: #00000077
+      background-color: #ffffff11
+    CatchsLabel
+    PokesLabel
