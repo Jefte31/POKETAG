@@ -8,6 +8,7 @@ CLIENT_DIR="$PLAY_ROOT/client"
 WINEPREFIX_DIR="$PLAY_ROOT/wine"
 LOGS="$PLAY_ROOT/logs"
 PIDS="$PLAY_ROOT/pids"
+NOVNC_WEB="$PLAY_ROOT/novnc-web"
 
 PDA_ROOT="$ROOT/upstream/PDA-By-Slicer/extraidos"
 CLIENT_SRC="$PDA_ROOT/OTClient v1.8/OTClient v1.8"
@@ -20,12 +21,12 @@ NOVNC_PORT=6080
 LOGIN_PORT=7171
 GAME_PORT=7172
 
-say() { printf '\n[POKETAG-PLAY] %s\n' "$*"; }
+say()  { printf '\n[POKETAG-PLAY] %s\n' "$*"; }
 warn() { printf '\n[POKETAG-PLAY][AVISO] %s\n' "$*" >&2; }
 fail() { printf '\n[POKETAG-PLAY][ERRO] %s\n' "$*" >&2; exit 1; }
 
 need_file() { [[ -f "$1" ]] || fail "Arquivo obrigatório não encontrado: $1"; }
-need_dir() { [[ -d "$1" ]] || fail "Diretório obrigatório não encontrado: $1"; }
+need_dir()  { [[ -d "$1" ]] || fail "Diretório obrigatório não encontrado: $1"; }
 
 port_open() {
   ss -ltnH 2>/dev/null | awk '{print $4}' | grep -Eq ":${1}$"
@@ -68,7 +69,7 @@ prepare_client() {
   mkdir -p "$PLAY_ROOT" "$LOGS" "$PIDS"
 
   if [[ ! -f "$CLIENT_DIR/$CLIENT_EXE" ]]; then
-    say "Preparando OTClient 8.54 para o teste..."
+    say "Preparando OTClient 8.54..."
     rm -rf "$CLIENT_DIR"
     mkdir -p "$CLIENT_DIR"
     cp -a "$CLIENT_SRC/." "$CLIENT_DIR/"
@@ -79,9 +80,7 @@ prepare_client() {
   cp -f "$ASSET_SRC/POK.spr" "$CLIENT_DIR/modules/game_tibiafiles/854/Tibia.spr"
 
   cat > "$CLIENT_DIR/otclientrc.lua" <<'LUA'
--- PokeTag gameplay-test profile.
--- Native server: 127.0.0.1:7171/7172
--- Protocol: 8.54
+-- PokeTag gameplay test: native server + protocol 8.54.
 local function configurePokeTagTest()
   g_settings.set('host', '127.0.0.1')
   g_settings.set('port', 7171)
@@ -92,68 +91,132 @@ local function configurePokeTagTest()
     EnterGame.setUniqueServer('127.0.0.1', 7171, 854, 330, 220)
   end
 end
-
 addEvent(configurePokeTagTest)
 LUA
 }
 
+prepare_novnc_web() {
+  local system_webroot="/usr/share/novnc"
+  need_dir "$system_webroot"
+
+  if [[ ! -f "$NOVNC_WEB/vnc.html" ]]; then
+    rm -rf "$NOVNC_WEB"
+    mkdir -p "$NOVNC_WEB"
+    cp -a "$system_webroot/." "$NOVNC_WEB/"
+  fi
+
+  cat > "$NOVNC_WEB/index.html" <<'HTML'
+<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=1&resize=scale">
+<title>PokeTag</title>
+</head><body>
+<a href="vnc.html?autoconnect=1&resize=scale">Abrir PokeTag</a>
+</body></html>
+HTML
+}
+
 start_desktop() {
   mkdir -p "$LOGS" "$PIDS"
+  prepare_novnc_web
   export DISPLAY="$DISPLAY_ID"
 
   start_bg xvfb bash -c "exec Xvfb '$DISPLAY_ID' -screen 0 1440x900x24 -ac >'$LOGS/xvfb.log' 2>&1"
   sleep 2
-
   start_bg x11vnc bash -c "exec x11vnc -display '$DISPLAY_ID' -forever -shared -nopw -rfbport '$VNC_PORT' -noxdamage >'$LOGS/x11vnc.log' 2>&1"
   sleep 1
-
-  local webroot="/usr/share/novnc"
-  [[ -d "$webroot" ]] || fail "noVNC não encontrado em $webroot. Rode: bash native/poketag-play.sh install"
-  start_bg novnc bash -c "exec websockify --web='$webroot' '$NOVNC_PORT' localhost:'$VNC_PORT' >'$LOGS/novnc.log' 2>&1"
+  start_bg novnc bash -c "exec websockify --web='$NOVNC_WEB' '$NOVNC_PORT' localhost:'$VNC_PORT' >'$LOGS/novnc.log' 2>&1"
 }
 
 start_server() {
-  say "Garantindo que o servidor nativo esteja online..."
+  say "Garantindo que o servidor Linux nativo esteja online..."
   bash "$ROOT/native/poketag-native.sh" start
   port_open "$LOGIN_PORT" || fail "Servidor não abriu a porta $LOGIN_PORT."
   port_open "$GAME_PORT" || fail "Servidor não abriu a porta $GAME_PORT."
 }
 
-start_client() {
-  export DISPLAY="$DISPLAY_ID"
-  export WINEPREFIX="$WINEPREFIX_DIR"
-  export WINEDEBUG=-all
+wine_prefix_is_32bit() {
+  [[ -f "$WINEPREFIX_DIR/system.reg" ]] && grep -q '^#arch=win32' "$WINEPREFIX_DIR/system.reg"
+}
 
+prepare_wine32() {
   command -v wine >/dev/null 2>&1 || fail "Wine não instalado. Rode: bash native/poketag-play.sh install"
-  mkdir -p "$WINEPREFIX_DIR"
+  mkdir -p "$LOGS"
 
-  if [[ ! -f "$WINEPREFIX_DIR/.poketag-ready" ]]; then
-    say "Inicializando o Wine do cliente pela primeira vez..."
-    env DISPLAY="$DISPLAY_ID" WINEPREFIX="$WINEPREFIX_DIR" WINEDEBUG=-all wineboot -u >/dev/null 2>&1 || true
-    touch "$WINEPREFIX_DIR/.poketag-ready"
+  if [[ -d "$WINEPREFIX_DIR" ]] && ! wine_prefix_is_32bit; then
+    warn "Prefixo Wine incompatível detectado; recriando somente o ambiente do cliente em 32 bits."
+    rm -rf "$WINEPREFIX_DIR"
   fi
 
-  if ! pid_alive "$PIDS/client.pid"; then
-    say "Abrindo OTClient 8.54..."
-    (
-      cd "$CLIENT_DIR"
-      exec env DISPLAY="$DISPLAY_ID" WINEPREFIX="$WINEPREFIX_DIR" WINEDEBUG=-all wine "$CLIENT_EXE" >"$LOGS/client.log" 2>&1
-    ) &
-    echo $! > "$PIDS/client.pid"
+  if ! wine_prefix_is_32bit; then
+    say "Criando prefixo Wine 32-bit para o OTClient legado..."
+    rm -rf "$WINEPREFIX_DIR"
+    mkdir -p "$WINEPREFIX_DIR"
+
+    set +e
+    env \
+      DISPLAY="$DISPLAY_ID" \
+      WINEPREFIX="$WINEPREFIX_DIR" \
+      WINEARCH=win32 \
+      WINEDLLOVERRIDES='mscoree,mshtml=' \
+      wineboot -u >"$LOGS/wineboot.log" 2>&1
+    local rc=$?
+    set -e
+
+    if [[ "$rc" -ne 0 ]] || ! wine_prefix_is_32bit; then
+      cat "$LOGS/wineboot.log" >&2 || true
+      fail "Não foi possível criar o prefixo Wine 32-bit."
+    fi
+  fi
+}
+
+start_client() {
+  prepare_wine32
+  export DISPLAY="$DISPLAY_ID"
+
+  if pid_alive "$PIDS/client.pid"; then
+    say "OTClient já está rodando (PID $(cat "$PIDS/client.pid"))."
+    return 0
   fi
 
-  sleep 4
-  if ! pid_alive "$PIDS/client.pid"; then
-    tail -n 120 "$LOGS/client.log" >&2 || true
-    fail "O OTClient encerrou durante a inicialização."
-  fi
+  rm -f "$PIDS/client.pid"
+  : > "$LOGS/client.log"
+  say "Abrindo OTClient 8.54 em Wine 32-bit..."
+
+  (
+    cd "$CLIENT_DIR"
+    exec env \
+      DISPLAY="$DISPLAY_ID" \
+      WINEPREFIX="$WINEPREFIX_DIR" \
+      WINEARCH=win32 \
+      WINEDLLOVERRIDES='mscoree,mshtml=' \
+      LIBGL_ALWAYS_SOFTWARE=1 \
+      WINEDEBUG=-all \
+      wine "./$CLIENT_EXE" >>"$LOGS/client.log" 2>&1
+  ) &
+  echo $! > "$PIDS/client.pid"
+
+  for _ in $(seq 1 20); do
+    if ! pid_alive "$PIDS/client.pid"; then
+      tail -n 160 "$LOGS/client.log" >&2 || true
+      fail "O OTClient encerrou durante a inicialização."
+    fi
+    if DISPLAY="$DISPLAY_ID" xwininfo -root -tree 2>/dev/null | grep -qi 'OTClient'; then
+      say "Janela do OTClient detectada."
+      return 0
+    fi
+    sleep 0.5
+  done
+
+  # Algumas versões não expõem o título imediatamente, mas permanecem funcionais.
+  pid_alive "$PIDS/client.pid" || fail "OTClient não permaneceu em execução."
+  say "OTClient em execução."
 }
 
 wait_novnc() {
   for _ in $(seq 1 30); do
-    if port_open "$NOVNC_PORT"; then
-      return 0
-    fi
+    if port_open "$NOVNC_PORT"; then return 0; fi
     sleep 1
   done
   fail "noVNC não abriu a porta $NOVNC_PORT."
@@ -161,48 +224,33 @@ wait_novnc() {
 
 credentials() {
   local db="$STATE_ROOT/forgottenserver.s3db"
-  [[ -f "$db" ]] || {
-    warn "Banco persistente ainda não existe. Inicie o servidor primeiro."
-    return 1
-  }
+  [[ -f "$db" ]] || { warn "Banco persistente ainda não existe. Inicie o servidor primeiro."; return 1; }
 
   python3 - "$db" <<'PY'
-import sqlite3
-import sys
-
-path = sys.argv[1]
-conn = sqlite3.connect(path)
+import sqlite3, sys
+conn = sqlite3.connect(sys.argv[1])
 cur = conn.cursor()
-
-try:
-    row = cur.execute("SELECT id, name, password FROM accounts WHERE name = '1' LIMIT 1").fetchone()
-except sqlite3.Error as exc:
-    print(f"Não foi possível consultar accounts: {exc}")
-    raise SystemExit(1)
-
+row = cur.execute("SELECT id, name, password FROM accounts WHERE name='1' LIMIT 1").fetchone()
 if row and str(row[2]) == '1':
-    print("Conta padrão de teste detectada:")
-    print("  account : 1")
-    print("  password: 1")
-    chars = cur.execute("SELECT name FROM players WHERE account_id = ? AND deleted = 0 ORDER BY name", (row[0],)).fetchall()
+    print('Conta padrão de teste detectada:')
+    print('  account : 1')
+    print('  password: 1')
+    chars = cur.execute("SELECT name FROM players WHERE account_id=? AND deleted=0 ORDER BY name", (row[0],)).fetchall()
     if chars:
-        print("  personagens:")
-        for (name,) in chars[:20]:
-            print(f"    - {name}")
+        print('  personagens:')
+        for (name,) in chars[:20]: print(f'    - {name}')
     else:
-        print("  personagens: nenhum cadastrado nessa conta")
+        print('  personagens: nenhum cadastrado nessa conta')
 else:
-    print("A conta padrão 1/1 não foi encontrada no banco persistente.")
-    print("Contas/personagens existentes (sem exibir senhas):")
-    rows = cur.execute("""
-        SELECT a.name, p.name
-        FROM accounts a
-        LEFT JOIN players p ON p.account_id = a.id AND p.deleted = 0
-        ORDER BY a.id, p.name
-        LIMIT 30
-    """).fetchall()
-    for account, player in rows:
-        print(f"  account={account}  character={player or '-'}")
+    print('A conta padrão 1/1 não foi encontrada.')
+    print('Contas/personagens existentes (sem senhas):')
+    for account, player in cur.execute("""
+        SELECT a.name, p.name FROM accounts a
+        LEFT JOIN players p ON p.account_id=a.id AND p.deleted=0
+        ORDER BY a.id, p.name LIMIT 30
+    """):
+        print(f'  account={account}  character={player or "-"}')
+conn.close()
 PY
 }
 
@@ -210,19 +258,18 @@ start_all() {
   prepare_client
   start_server
   start_desktop
-  start_client
   wait_novnc
+  start_client
 
-  say "Ambiente de teste jogável iniciado."
-  printf '\nNo Google Cloud Shell:\n'
-  printf '  1. Abra Web Preview -> Preview on port %s\n' "$NOVNC_PORT"
-  printf '  2. No noVNC, clique em Connect se necessário.\n'
-  printf '  3. O OTClient deve abrir já apontando para 127.0.0.1:%s (8.54).\n' "$LOGIN_PORT"
-  printf '  4. Veja credenciais locais com: bash native/poketag-play.sh credentials\n'
-  printf '\nChecklist: native/GAME_TEST_PLAN.md\n'
-  printf 'Status:    bash native/poketag-play.sh status\n'
-  printf 'Logs:      bash native/poketag-play.sh logs\n'
-  printf 'Parar UI:  bash native/poketag-play.sh stop\n'
+  say "PokeTag pronto para teste jogável."
+  printf '\nAbra no Google Cloud Shell:\n'
+  printf '  Web Preview -> Preview on port %s\n' "$NOVNC_PORT"
+  printf '  A página agora redireciona automaticamente para o noVNC.\n'
+  printf '\nServidor : 127.0.0.1:%s / game %s\n' "$LOGIN_PORT" "$GAME_PORT"
+  printf 'Protocolo: 8.54\n'
+  printf 'Credenciais: bash native/poketag-play.sh credentials\n'
+  printf 'Status      : bash native/poketag-play.sh status\n'
+  printf 'Logs        : bash native/poketag-play.sh logs\n'
 }
 
 stop_ui() {
@@ -240,10 +287,10 @@ stop_ui() {
       rm -f "$f"
     fi
   done
-  if command -v wineserver >/dev/null 2>&1; then
+  if command -v wineserver >/dev/null 2>&1 && [[ -d "$WINEPREFIX_DIR" ]]; then
     WINEPREFIX="$WINEPREFIX_DIR" wineserver -k >/dev/null 2>&1 || true
   fi
-  say "Interface de teste parada. O servidor nativo permanece separado."
+  say "Interface parada. O servidor nativo permanece separado."
 }
 
 status() {
@@ -255,31 +302,21 @@ status() {
       printf '  %-8s STOPPED\n' "$name"
     fi
   done
-
-  if port_open "$LOGIN_PORT"; then
-    printf '  login    OPEN 127.0.0.1:%s\n' "$LOGIN_PORT"
-  else
-    printf '  login    CLOSED :%s\n' "$LOGIN_PORT"
-  fi
-  if port_open "$GAME_PORT"; then
-    printf '  game     OPEN 127.0.0.1:%s\n' "$GAME_PORT"
-  else
-    printf '  game     CLOSED :%s\n' "$GAME_PORT"
-  fi
-  if port_open "$NOVNC_PORT"; then
-    printf '  noVNC    OPEN :%s\n' "$NOVNC_PORT"
-  else
-    printf '  noVNC    CLOSED :%s\n' "$NOVNC_PORT"
-  fi
+  port_open "$LOGIN_PORT" && printf '  login    OPEN 127.0.0.1:%s\n' "$LOGIN_PORT" || printf '  login    CLOSED :%s\n' "$LOGIN_PORT"
+  port_open "$GAME_PORT"  && printf '  game     OPEN 127.0.0.1:%s\n' "$GAME_PORT"  || printf '  game     CLOSED :%s\n' "$GAME_PORT"
+  port_open "$NOVNC_PORT" && printf '  noVNC    OPEN :%s\n' "$NOVNC_PORT" || printf '  noVNC    CLOSED :%s\n' "$NOVNC_PORT"
+  wine_prefix_is_32bit && printf '  wine     PREFIX win32 OK\n' || printf '  wine     PREFIX win32 AUSENTE/INVÁLIDO\n'
 }
 
 logs() {
   printf '\n===== SERVER =====\n'
   bash "$ROOT/native/poketag-native.sh" logs 2>/dev/null || true
   printf '\n===== CLIENT =====\n'
-  tail -n "${LINES:-120}" "$LOGS/client.log" 2>/dev/null || true
+  tail -n "${LINES:-160}" "$LOGS/client.log" 2>/dev/null || true
+  printf '\n===== WINEBOOT =====\n'
+  tail -n 80 "$LOGS/wineboot.log" 2>/dev/null || true
   printf '\n===== noVNC =====\n'
-  tail -n 40 "$LOGS/novnc.log" 2>/dev/null || true
+  tail -n 60 "$LOGS/novnc.log" 2>/dev/null || true
 }
 
 doctor() {
@@ -290,14 +327,13 @@ doctor() {
     "$ASSET_SRC/POK.dat" \
     "$ASSET_SRC/POK.spr"; do
     if [[ -e "$file" ]]; then
-      printf '  arquivo %-8s OK  %s\n' "" "${file#$ROOT/}"
+      printf '  arquivo          OK  %s\n' "${file#$ROOT/}"
     else
-      printf '  arquivo %-8s FALTA %s\n' "" "${file#$ROOT/}"
+      printf '  arquivo          FALTA %s\n' "${file#$ROOT/}"
       failed=1
     fi
   done
-
-  for cmd in wine Xvfb x11vnc websockify python3 ss; do
+  for cmd in wine Xvfb x11vnc websockify xwininfo python3 ss; do
     if command -v "$cmd" >/dev/null 2>&1; then
       printf '  %-16s OK\n' "$cmd"
     else
@@ -313,15 +349,15 @@ usage() {
 PokeTag Gameplay Test - cliente 8.54 + servidor Linux nativo
 
 Uso:
-  bash native/poketag-play.sh install      # instala dependências gráficas/Wine
-  bash native/poketag-play.sh prepare      # prepara o cliente e assets 8.54
-  bash native/poketag-play.sh start        # inicia servidor + noVNC + OTClient
-  bash native/poketag-play.sh stop         # para somente cliente/noVNC
+  bash native/poketag-play.sh install
+  bash native/poketag-play.sh prepare
+  bash native/poketag-play.sh start
+  bash native/poketag-play.sh stop
   bash native/poketag-play.sh status
   bash native/poketag-play.sh logs
-  bash native/poketag-play.sh credentials  # mostra se 1/1 está disponível
+  bash native/poketag-play.sh credentials
   bash native/poketag-play.sh doctor
-  bash native/poketag-play.sh setup        # install + start
+  bash native/poketag-play.sh setup
 
 Para encerrar também o servidor:
   bash native/poketag-native.sh stop
