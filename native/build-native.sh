@@ -25,7 +25,8 @@ python3 - \
   "$WORK/combat.cpp" \
   "$WORK/condition.cpp" \
   "$WORK/configmanager.cpp" \
-  "$WORK/connection.cpp" <<'PY'
+  "$WORK/connection.cpp" \
+  "$WORK/game.cpp" <<'PY'
 from pathlib import Path
 import sys
 
@@ -177,6 +178,34 @@ for old, new in replacements.items():
         raise SystemExit('Could not locate legacy Connection timeout expression: ' + old)
     cn = cn.replace(old, new)
 write(connection, cn)
+
+# Modern GCC rejects false as an Item* sentinel. This function uses NULL as
+# the conventional not-found result elsewhere in this codebase.
+game = Path(sys.argv[10])
+gm = read(game)
+needle = '''Item* Game::findItemOfType(Cylinder* cylinder, uint16_t itemId,
+\tbool depthSearch /*= true*/, int32_t subType /*= -1*/)
+{
+\tif(!cylinder)
+\t\treturn false;'''
+replacement = '''Item* Game::findItemOfType(Cylinder* cylinder, uint16_t itemId,
+\tbool depthSearch /*= true*/, int32_t subType /*= -1*/)
+{
+\tif(!cylinder)
+\t\treturn NULL;'''
+if needle not in gm:
+    raise SystemExit('Could not locate Game::findItemOfType pointer sentinel')
+gm = gm.replace(needle, replacement, 1)
+
+# Two stale switch labels still use the fork's old TEST placeholder. The
+# published enum already has COMBAT_STEELDAMAGE and the condition/combat layer
+# maps the corresponding steel condition to that type, so use the canonical
+# combat enum here as well.
+count = gm.count('case COMBAT_TESTDAMAGE:')
+if count != 2:
+    raise SystemExit('Expected exactly 2 stale COMBAT_TESTDAMAGE cases, found %d' % count)
+gm = gm.replace('case COMBAT_TESTDAMAGE:', 'case COMBAT_STEELDAMAGE:')
+write(game, gm)
 PY
 
 say "Generating build system..."
