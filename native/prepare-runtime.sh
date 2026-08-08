@@ -6,6 +6,7 @@ SERVER_ROOT="$ROOT/upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0"
 BUILD_ROOT="$ROOT/.poketag-native-build"
 BIN="$BUILD_ROOT/bin/theforgottenserver"
 RUNTIME="$BUILD_ROOT/runtime"
+CASE_FIXER="$ROOT/native/fix-runtime-case.py"
 
 say() { printf '\n[POKETAG-RUNTIME] %s\n' "$*"; }
 
@@ -14,6 +15,7 @@ say() { printf '\n[POKETAG-RUNTIME] %s\n' "$*"; }
 [[ -d "$SERVER_ROOT/data" ]] || { echo "data directory not found under $SERVER_ROOT" >&2; exit 1; }
 [[ -f "$SERVER_ROOT/forgottenserver.s3db" ]] || { echo "SQLite database not found under $SERVER_ROOT" >&2; exit 1; }
 [[ -f "$SERVER_ROOT/data/world/Poke.otbm" ]] || { echo "Expected Linux-case map data/world/Poke.otbm not found" >&2; exit 1; }
+[[ -f "$CASE_FIXER" ]] || { echo "Runtime case fixer not found: $CASE_FIXER" >&2; exit 1; }
 
 rm -rf "$RUNTIME"
 mkdir -p "$RUNTIME"
@@ -32,17 +34,11 @@ if ! cp -al "$SERVER_ROOT/data" "$RUNTIME/data" 2>/dev/null; then
   cp -a "$SERVER_ROOT/data" "$RUNTIME/data"
 fi
 
-# The original server was developed for Windows' case-insensitive filesystem.
-# Its XML asks for pokemon/system/... while the real folder is pokemon/System/.
-# Keep both spellings in the staged Linux runtime.
-if [[ -d "$RUNTIME/data/actions/scripts/pokemon/System" && ! -e "$RUNTIME/data/actions/scripts/pokemon/system" ]]; then
-  ln -s "System" "$RUNTIME/data/actions/scripts/pokemon/system"
-fi
-
-# Same issue for the Earthquake spell filename.
-if [[ -f "$RUNTIME/data/spells/scripts/poke/Earthquake.lua" && ! -e "$RUNTIME/data/spells/scripts/poke/earthquake.lua" ]]; then
-  ln -s "Earthquake.lua" "$RUNTIME/data/spells/scripts/poke/earthquake.lua"
-fi
+# The historical datapack was authored on Windows. Scan all XML registries and
+# materialize exact-case symlink aliases in the isolated runtime for references
+# whose actual file exists with different capitalization (e.g. paras.xml vs
+# Paras.xml, pokemon/system vs pokemon/System, earthquake.lua vs Earthquake.lua).
+python3 "$CASE_FIXER" "$RUNTIME/data"
 
 python3 - "$RUNTIME/config.lua" <<'PY'
 from pathlib import Path
