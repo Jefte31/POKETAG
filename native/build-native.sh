@@ -15,13 +15,13 @@ rm -rf "$WORK" "$OUT"
 mkdir -p "$WORK" "$OUT"
 cp -a "$SRC/." "$WORK/"
 
-say "Disabling obsolete remote version/blacklist checks in build copy..."
-python3 - "$WORK/otserv.cpp" <<'PY'
+say "Applying local/native compatibility patches in build copy..."
+python3 - "$WORK/otserv.cpp" "$WORK/configure.ac" <<'PY'
 from pathlib import Path
 import sys
 
-p = Path(sys.argv[1])
-text = p.read_text(encoding='latin-1')
+otserv = Path(sys.argv[1])
+text = otserv.read_text(encoding='latin-1')
 start = '\tstd::cout << ">> Checking software version... ";'
 end = '\tstd::cout << ">> Loading RSA key" << std::endl;'
 si = text.find(start)
@@ -31,8 +31,15 @@ if si < 0 or ei < 0:
 replacement = (
     '\tstd::cout << ">> PokeTag local mode: legacy update/blacklist checks disabled." << std::endl;\n\n'
 )
-text = text[:si] + replacement + text[ei:]
-p.write_text(text, encoding='latin-1')
+otserv.write_text(text[:si] + replacement + text[ei:], encoding='latin-1')
+
+configure = Path(sys.argv[2])
+cfg = configure.read_text(encoding='latin-1')
+old = 'AC_CHECK_HEADERS([boost/tr1/unordered_set.hpp], , [AC_MSG_ERROR("boost::unordered_set header not found.")])'
+new = 'AC_CHECK_HEADERS([boost/unordered_set.hpp], , [AC_MSG_ERROR("boost::unordered_set header not found.")])'
+if old not in cfg:
+    raise SystemExit('Could not locate legacy Boost unordered_set configure check')
+configure.write_text(cfg.replace(old, new), encoding='latin-1')
 PY
 
 say "Generating build system..."
