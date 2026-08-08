@@ -10,12 +10,11 @@ A primeira meta é deliberadamente **local e individual**: cada pessoa mantém a
 
 ## Teste rápido no Google Cloud Shell
 
-Clone/atualize o repositório e mude para a branch de integração enquanto ela estiver em validação:
+Clone a branch principal:
 
 ```bash
 git clone https://github.com/Jefte31/PokeTag.git
 cd PokeTag
-git checkout frankenstein-local-v1
 ```
 
 Se você já tinha clonado:
@@ -23,11 +22,11 @@ Se você já tinha clonado:
 ```bash
 cd ~/PokeTag
 git fetch origin
-git checkout frankenstein-local-v1
-git pull
+git checkout main
+git pull origin main
 ```
 
-Confira se as três bases necessárias estão presentes:
+Confira se os três blocos necessários estão presentes:
 
 ```bash
 bash poketag.sh doctor
@@ -81,9 +80,11 @@ bash poketag.sh reset
 ## Comandos úteis
 
 ```bash
+bash poketag.sh doctor
 bash poketag.sh status
 bash poketag.sh logs
 bash poketag.sh stop
+bash poketag.sh reset
 ```
 
 ## O que foi alterado no modo local
@@ -94,8 +95,8 @@ Na cópia de runtime do PDA 2.9, o launcher ajusta apenas configurações necess
 - mundo `no-pvp`;
 - uma jornada por conta;
 - clones desativados;
-- premium liberado para não bloquear conteúdo durante a validação;
-- timeout de inatividade elevado para permitir sessões AFK longas;
+- premium liberado durante a validação;
+- timeout de inatividade elevado para sessões AFK longas;
 - banco SQLite local preservado entre execuções.
 
 Os arquivos originais em `upstream/` continuam disponíveis como referência.
@@ -109,21 +110,22 @@ upstream/otclient-opentibiabr/data/things/854/Tibia.dat
 upstream/otclient-opentibiabr/data/things/854/Tibia.spr
 ```
 
-O `otclientrc.lua` do cliente moderno também aponta para o servidor local 8.54. Isso prepara a segunda etapa: substituir o cliente PDA antigo pelo OTClient moderno sem trocar o conteúdo do jogo.
+O `otclientrc.lua` do cliente moderno também aponta para o servidor local 8.54. Isso prepara a próxima etapa: substituir o cliente PDA antigo pelo OTClient moderno sem trocar o conteúdo do jogo.
 
 ## AFK
 
-Nesta primeira integração, **AFK significa que o servidor não derruba o jogador por inatividade e a jornada continua salva enquanto a sessão estiver rodando**. A automação real de caça/target/cavebot será ligada ao cliente moderno depois de validarmos login, mapa, movimentação, batalha, captura e persistência.
+Nesta primeira integração, **AFK significa que o servidor não derruba o jogador por inatividade e a jornada continua salva enquanto a sessão estiver rodando**. O OTClient moderno já possui uma base de bot/automação que será conectada depois que login, mapa, movimentação, batalha, captura e persistência estiverem validados no runtime local.
 
-No Cloud Shell existe ainda uma limitação externa: a própria VM do Cloud Shell pode ser encerrada pelo Google após períodos de inatividade. Em um PC local ou servidor próprio, essa limitação não existe.
+No Cloud Shell existe uma limitação externa: a própria VM pode ser encerrada pelo Google após períodos de inatividade. Em um PC local ou servidor próprio, essa limitação não existe.
 
-## Próxima sequência de integração
+## Ordem de evolução do Frankenstein
 
 1. validar PDA 2.9 + OTClient PDA via Wine/noVNC;
 2. validar o mesmo servidor com OTClient moderno e assets 8.54;
-3. aproveitar o bot/automação do OTClient moderno para AFK;
+3. aproveitar o bot/automação do OTClient moderno para caça AFK;
 4. substituir o executável Windows pelo TFS 0.3.6 compilado a partir do sirninja;
-5. só então preparar contas online, servidor autoritativo e multiplayer.
+5. estabilizar save, progressão, captura, mapa e sistemas principais;
+6. somente depois preparar contas online, servidor autoritativo e multiplayer.
 
 ## Licenças e assets
 
