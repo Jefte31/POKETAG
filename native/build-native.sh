@@ -13,6 +13,7 @@ say() { printf '\n[POKETAG-NATIVE] %s\n' "$*"; }
 [[ -d "$SRC" ]] || { echo "Source not found: $SRC" >&2; exit 1; }
 [[ -f "$ROOT/native/patch-native.py" ]] || { echo "Patch driver not found: $ROOT/native/patch-native.py" >&2; exit 1; }
 [[ -f "$ROOT/native/patch-native-followup.py" ]] || { echo "Follow-up patch driver not found: $ROOT/native/patch-native-followup.py" >&2; exit 1; }
+[[ -f "$ROOT/native/patch-native-runtime.py" ]] || { echo "Runtime-safety patch driver not found: $ROOT/native/patch-native-runtime.py" >&2; exit 1; }
 
 rm -rf "$WORK" "$OUT"
 mkdir -p "$WORK" "$OUT"
@@ -21,6 +22,7 @@ cp -a "$SRC/." "$WORK/"
 say "Applying local/native compatibility patches in build copy..."
 python3 "$ROOT/native/patch-native.py" "$WORK"
 python3 "$ROOT/native/patch-native-followup.py" "$WORK"
+python3 "$ROOT/native/patch-native-runtime.py" "$WORK"
 
 say "Generating build system..."
 cd "$WORK"
