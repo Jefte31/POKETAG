@@ -181,12 +181,13 @@ if count != 2:
 write("game.cpp", game.replace('case COMBAT_TESTDAMAGE:', 'case COMBAT_STEELDAMAGE:'))
 
 # Boost.Filesystem removed directory_entry::leaf().
-replace_once(
-    "luascript.cpp",
-    'std::string s = it->leaf();',
-    'std::string s = it->path().filename().string();',
-    "modern Boost.Filesystem directory entry name",
-)
+for filename in ("luascript.cpp", "scriptmanager.cpp"):
+    replace_once(
+        filename,
+        'std::string s = it->leaf();',
+        'std::string s = it->path().filename().string();',
+        "modern Boost.Filesystem directory entry name",
+    )
 
 # A stray incomplete symbol was left between two Monster method definitions.
 replace_once(
