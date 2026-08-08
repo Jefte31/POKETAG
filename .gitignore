@@ -1,4 +1,6 @@
 .poketag-runtime/
+.poketag-native-build/
+.poketag-native-state/
 .vscode/
 .idea/
 *.log
