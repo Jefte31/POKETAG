@@ -16,40 +16,130 @@ mkdir -p "$WORK" "$OUT"
 cp -a "$SRC/." "$WORK/"
 
 say "Applying local/native compatibility patches in build copy..."
-python3 - "$WORK/otserv.cpp" "$WORK/configure.ac" "$WORK/house.h" <<'PY'
+python3 - \
+  "$WORK/otserv.cpp" \
+  "$WORK/configure.ac" \
+  "$WORK/house.h" \
+  "$WORK/chat.cpp" \
+  "$WORK/condition.h" \
+  "$WORK/combat.cpp" <<'PY'
 from pathlib import Path
 import sys
 
+def read(path):
+    return Path(path).read_text(encoding='latin-1')
+
+def write(path, text):
+    Path(path).write_text(text, encoding='latin-1')
+
+# The original 2010-era engine blocks startup on dead remote services.
 otserv = Path(sys.argv[1])
-text = otserv.read_text(encoding='latin-1')
+text = read(otserv)
 start = '\tstd::cout << ">> Checking software version... ";'
 end = '\tstd::cout << ">> Loading RSA key" << std::endl;'
 si = text.find(start)
 ei = text.find(end, si)
 if si < 0 or ei < 0:
     raise SystemExit('Could not locate legacy version/blacklist block in otserv.cpp')
-replacement = (
+text = text[:si] + (
     '\tstd::cout << ">> PokeTag local mode: legacy update/blacklist checks disabled." << std::endl;\n\n'
-)
-otserv.write_text(text[:si] + replacement + text[ei:], encoding='latin-1')
+) + text[ei:]
+write(otserv, text)
 
+# Modern Boost no longer ships the old boost/tr1 wrapper.
 configure = Path(sys.argv[2])
-cfg = configure.read_text(encoding='latin-1')
+cfg = read(configure)
 old = 'AC_CHECK_HEADERS([boost/tr1/unordered_set.hpp], , [AC_MSG_ERROR("boost::unordered_set header not found.")])'
 new = 'AC_CHECK_HEADERS([boost/unordered_set.hpp], , [AC_MSG_ERROR("boost::unordered_set header not found.")])'
 if old not in cfg:
     raise SystemExit('Could not locate legacy Boost unordered_set configure check')
-configure.write_text(cfg.replace(old, new), encoding='latin-1')
+write(configure, cfg.replace(old, new))
 
 house = Path(sys.argv[3])
-h = house.read_text(encoding='latin-1')
+h = read(house)
 old_include = '#include <boost/tr1/unordered_set.hpp>'
 old_type = 'typedef std::tr1::unordered_set<uint32_t> PlayerList;'
 if old_include not in h or old_type not in h:
     raise SystemExit('Could not locate legacy TR1 unordered_set usage in house.h')
 h = h.replace(old_include, '#include <boost/unordered_set.hpp>')
 h = h.replace(old_type, 'typedef boost::unordered_set<uint32_t> PlayerList;')
-house.write_text(h, encoding='latin-1')
+write(house, h)
+
+# GCC 11+ correctly rejects bool as a pointer return value.
+chat = Path(sys.argv[4])
+c = read(chat)
+needle = 'if(!player || player->isRemoved())\n\t\treturn false;'
+if needle not in c:
+    raise SystemExit('Could not locate Chat::getChannel null return')
+c = c.replace(needle, 'if(!player || player->isRemoved())\n\t\treturn NULL;', 1)
+write(chat, c)
+
+# PokeTibia added a steel combat type but omitted a condition enum bit. The
+# existing CONDITION_TEST bit is unused and is retained as a compatibility alias.
+condition = Path(sys.argv[5])
+cond = read(condition)
+needle = '\tCONDITION_TEST = 1 << 24,\n\tCONDITION_ELECTRIC = 1 << 25,'
+if needle not in cond:
+    raise SystemExit('Could not locate condition enum compatibility slot')
+cond = cond.replace(
+    needle,
+    '\tCONDITION_TEST = 1 << 24,\n\tCONDITION_STEEL = CONDITION_TEST,\n\tCONDITION_ELECTRIC = 1 << 25,',
+    1,
+)
+write(condition, cond)
+
+# This fork has a missing brace around attackerPlayer logic, leaving `color`
+# out of scope on conforming compilers. Restore the intended block structure.
+combat = Path(sys.argv[6])
+co = read(combat)
+old_block = '''\t\tconst Player* attackerPlayer = NULL;
+\t\tif((attackerPlayer = attacker->getPlayer()) || (attacker->getMaster()
+\t\t\t&& (attackerPlayer = attacker->getMaster()->getPlayer())))
+\t\t\tuint32_t color = g_config.getNumber(ConfigManager::NO_DAMAGE_TO_SAME_COLORS);
+\t\tif(color != 0)
+\t\t{
+                 Outfit_t attackerOutfit = attackerPlayer->getCurrentOutfit();
+                 Outfit_t targetOutfit = targetPlayer->getCurrentOutfit();
+                 if(attackerOutfit.lookHead == targetOutfit.lookHead && attackerOutfit.lookBody == targetOutfit.lookBody && attackerOutfit.lookLegs == targetOutfit.lookLegs && attackerOutfit.lookFeet == targetOutfit.lookFeet)
+                 {
+                  return RET_YOUMAYNOTATTACKTHISPLAYER;
+                 }
+        }
+\t\t{
+\t\t\tcheckZones = true;
+\t\t\tif((g_game.getWorldType() == WORLD_TYPE_NO_PVP && !Combat::isInPvpZone(attacker, target)) ||
+\t\t\t\tisProtected(const_cast<Player*>(attackerPlayer), const_cast<Player*>(targetPlayer))
+\t\t\t\t|| (g_config.getBool(ConfigManager::CANNOT_ATTACK_SAME_LOOKFEET) &&
+\t\t\t\tattackerPlayer->getDefaultOutfit().lookFeet == targetPlayer->getDefaultOutfit().lookFeet)
+\t\t\t\t|| !attackerPlayer->canSeeCreature(targetPlayer))
+\t\t\t\treturn RET_YOUMAYNOTATTACKTHISPLAYER;
+\t\t}
+'''
+new_block = '''\t\tconst Player* attackerPlayer = NULL;
+\t\tif((attackerPlayer = attacker->getPlayer()) || (attacker->getMaster()
+\t\t\t&& (attackerPlayer = attacker->getMaster()->getPlayer())))
+\t\t{
+\t\t\tuint32_t color = g_config.getNumber(ConfigManager::NO_DAMAGE_TO_SAME_COLORS);
+\t\t\tif(color != 0)
+\t\t\t{
+\t\t\t\tOutfit_t attackerOutfit = attackerPlayer->getCurrentOutfit();
+\t\t\t\tOutfit_t targetOutfit = targetPlayer->getCurrentOutfit();
+\t\t\t\tif(attackerOutfit.lookHead == targetOutfit.lookHead && attackerOutfit.lookBody == targetOutfit.lookBody && attackerOutfit.lookLegs == targetOutfit.lookLegs && attackerOutfit.lookFeet == targetOutfit.lookFeet)
+\t\t\t\t\treturn RET_YOUMAYNOTATTACKTHISPLAYER;
+\t\t\t}
+
+\t\t\tcheckZones = true;
+\t\t\tif((g_game.getWorldType() == WORLD_TYPE_NO_PVP && !Combat::isInPvpZone(attacker, target)) ||
+\t\t\t\tisProtected(const_cast<Player*>(attackerPlayer), const_cast<Player*>(targetPlayer))
+\t\t\t\t|| (g_config.getBool(ConfigManager::CANNOT_ATTACK_SAME_LOOKFEET) &&
+\t\t\t\tattackerPlayer->getDefaultOutfit().lookFeet == targetPlayer->getDefaultOutfit().lookFeet)
+\t\t\t\t|| !attackerPlayer->canSeeCreature(targetPlayer))
+\t\t\t\treturn RET_YOUMAYNOTATTACKTHISPLAYER;
+\t\t}
+'''
+if old_block not in co:
+    raise SystemExit('Could not locate malformed attackerPlayer block in combat.cpp')
+write(combat, co.replace(old_block, new_block, 1))
 PY
 
 say "Generating build system..."
