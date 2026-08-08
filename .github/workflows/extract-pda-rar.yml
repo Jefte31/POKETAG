@@ -1,0 +1,89 @@
+name: Extract PDA By Slicer archives
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/extract-pda-rar.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install RAR extractor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full
+
+      - name: Extract every RAR under PDA-By-Slicer
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT='upstream/PDA-By-Slicer'
+
+          if [ ! -d "$ROOT" ]; then
+            echo "Directory not found: $ROOT"
+            exit 1
+          fi
+
+          total=0
+          pass=0
+          while true; do
+            pass=$((pass + 1))
+            found=0
+
+            while IFS= read -r -d '' archive; do
+              found=1
+              total=$((total + 1))
+              destination="${archive%.*}"
+              echo "Extracting: $archive"
+              echo "Into:       $destination"
+              mkdir -p "$destination"
+              7z x -y "$archive" "-o$destination"
+              rm -f "$archive"
+            done < <(find "$ROOT" -type f -iname '*.rar' -print0)
+
+            if [ "$found" -eq 0 ]; then
+              break
+            fi
+
+            if [ "$pass" -ge 10 ]; then
+              echo 'Too many nested archive passes; aborting for safety.'
+              exit 1
+            fi
+          done
+
+          echo "RAR archives extracted: $total"
+
+          echo 'Checking for files that GitHub will reject (>99 MB)...'
+          large_files="$(find "$ROOT" -type f -size +99M -print || true)"
+          if [ -n "$large_files" ]; then
+            echo 'The following extracted files exceed 99 MB:'
+            echo "$large_files"
+            echo 'Commit aborted. These files need Git LFS or another storage strategy.'
+            exit 1
+          fi
+
+      - name: Commit extracted files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A upstream/PDA-By-Slicer
+
+          if git diff --cached --quiet; then
+            echo 'Nothing to commit.'
+            exit 0
+          fi
+
+          git commit -m 'chore: extract PDA By Slicer RAR archives'
+          git push origin HEAD:main
