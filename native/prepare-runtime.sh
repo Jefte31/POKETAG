@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_ROOT="$ROOT/upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0"
 BUILD_ROOT="$ROOT/.poketag-native-build"
+STATE_ROOT="$ROOT/.poketag-native-state"
+STATE_DB="$STATE_ROOT/forgottenserver.s3db"
 BIN="$BUILD_ROOT/bin/theforgottenserver"
 RUNTIME="$BUILD_ROOT/runtime"
 CASE_FIXER="$ROOT/native/fix-runtime-case.py"
@@ -17,13 +19,19 @@ say() { printf '\n[POKETAG-RUNTIME] %s\n' "$*"; }
 [[ -f "$SERVER_ROOT/data/world/Poke.otbm" ]] || { echo "Expected Linux-case map data/world/Poke.otbm not found" >&2; exit 1; }
 [[ -f "$CASE_FIXER" ]] || { echo "Runtime case fixer not found: $CASE_FIXER" >&2; exit 1; }
 
+mkdir -p "$STATE_ROOT"
+if [[ ! -f "$STATE_DB" ]]; then
+  say "Creating persistent SQLite state from the historical seed database..."
+  cp -f "$SERVER_ROOT/forgottenserver.s3db" "$STATE_DB"
+fi
+
 rm -rf "$RUNTIME"
 mkdir -p "$RUNTIME"
 
 cp -f "$BIN" "$RUNTIME/theforgottenserver"
 chmod +x "$RUNTIME/theforgottenserver"
 cp -f "$SERVER_ROOT/config.lua" "$RUNTIME/config.lua"
-cp -f "$SERVER_ROOT/forgottenserver.s3db" "$RUNTIME/forgottenserver.s3db"
+ln -s "$STATE_DB" "$RUNTIME/forgottenserver.s3db"
 
 # Build an isolated directory tree without duplicating the large map. Hardlinks
 # are fast and cheap, while the separate directory structure lets us add Linux
@@ -68,5 +76,5 @@ PY
 say "Runtime staged at $RUNTIME"
 echo "  binary: $RUNTIME/theforgottenserver"
 echo "  config: $RUNTIME/config.lua"
-echo "  database: $RUNTIME/forgottenserver.s3db"
+echo "  persistent database: $STATE_DB"
 echo "  datapack: isolated Linux-compatible tree at $RUNTIME/data"
