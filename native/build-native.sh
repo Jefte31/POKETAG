@@ -27,7 +27,9 @@ python3 - \
   "$WORK/configmanager.cpp" \
   "$WORK/connection.cpp" \
   "$WORK/game.cpp" \
-  "$WORK/luascript.cpp" <<'PY'
+  "$WORK/luascript.cpp" \
+  "$WORK/monster.cpp" \
+  "$WORK/monsters.cpp" <<'PY'
 from pathlib import Path
 import sys
 
@@ -216,6 +218,32 @@ needle = 'std::string s = it->leaf();'
 if needle not in ls:
     raise SystemExit('Could not locate legacy Boost filesystem leaf() call')
 write(luascript, ls.replace(needle, 'std::string s = it->path().filename().string();', 1))
+
+# A stray, incomplete symbol was left between two Monster method definitions.
+# It has no declaration/body and is not a valid function definition, so remove
+# only that orphan line while leaving the surrounding behavior untouched.
+monster = Path(sys.argv[12])
+mo = read(monster)
+needle = '\nCreature::createCorpse\nvoid Monster::getPathSearchParams'
+if needle not in mo:
+    raise SystemExit('Could not locate orphan Creature::createCorpse token')
+write(monster, mo.replace(needle, '\nvoid Monster::getPathSearchParams', 1))
+
+# The fork already defines COMBAT_STEELDAMAGE, but two monster parsing paths
+# still reference a removed COMBAT_TESTDAMAGE placeholder. Preserve old XML
+# files that may say "test" while also accepting the intended "steel" name.
+monsters = Path(sys.argv[13])
+ms = read(monsters)
+name_needle = 'else if(tmpName == "test")\n\t\t\tcombat->setParam(COMBATPARAM_COMBATTYPE, COMBAT_TESTDAMAGE);'
+name_replacement = 'else if(tmpName == "test" || tmpName == "steel")\n\t\t\tcombat->setParam(COMBATPARAM_COMBATTYPE, COMBAT_STEELDAMAGE);'
+if name_needle not in ms:
+    raise SystemExit('Could not locate legacy monster test/steel spell mapping')
+ms = ms.replace(name_needle, name_replacement, 1)
+remaining = ms.count('COMBAT_TESTDAMAGE')
+if remaining != 1:
+    raise SystemExit('Expected exactly 1 remaining COMBAT_TESTDAMAGE mapping, found %d' % remaining)
+ms = ms.replace('COMBAT_TESTDAMAGE', 'COMBAT_STEELDAMAGE', 1)
+write(monsters, ms)
 PY
 
 say "Generating build system..."
