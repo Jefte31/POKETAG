@@ -24,7 +24,8 @@ python3 - \
   "$WORK/condition.h" \
   "$WORK/combat.cpp" \
   "$WORK/condition.cpp" \
-  "$WORK/configmanager.cpp" <<'PY'
+  "$WORK/configmanager.cpp" \
+  "$WORK/connection.cpp" <<'PY'
 from pathlib import Path
 import sys
 
@@ -159,6 +160,23 @@ needle = 'getGlobalNumber(L, "noDamageToSameColors", 0)'
 if needle not in cm:
     raise SystemExit('Could not locate legacy getGlobalNumber call')
 write(configmanager, cm.replace(needle, 'getGlobalNumber("noDamageToSameColors", 0)', 1))
+
+# Newer Boost.Date_Time deliberately does not classify an unnamed enum as an
+# integral template argument. Preserve the legacy timeout values while giving
+# seconds() the int type it expects.
+connection = Path(sys.argv[9])
+cn = read(connection)
+replacements = {
+    'boost::posix_time::seconds(Connection::readTimeout)':
+        'boost::posix_time::seconds(static_cast<int>(Connection::readTimeout))',
+    'boost::posix_time::seconds(Connection::writeTimeout)':
+        'boost::posix_time::seconds(static_cast<int>(Connection::writeTimeout))',
+}
+for old, new in replacements.items():
+    if old not in cn:
+        raise SystemExit('Could not locate legacy Connection timeout expression: ' + old)
+    cn = cn.replace(old, new)
+write(connection, cn)
 PY
 
 say "Generating build system..."
