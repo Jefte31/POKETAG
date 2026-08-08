@@ -26,7 +26,8 @@ python3 - \
   "$WORK/condition.cpp" \
   "$WORK/configmanager.cpp" \
   "$WORK/connection.cpp" \
-  "$WORK/game.cpp" <<'PY'
+  "$WORK/game.cpp" \
+  "$WORK/luascript.cpp" <<'PY'
 from pathlib import Path
 import sys
 
@@ -206,6 +207,15 @@ if count != 2:
     raise SystemExit('Expected exactly 2 stale COMBAT_TESTDAMAGE cases, found %d' % count)
 gm = gm.replace('case COMBAT_TESTDAMAGE:', 'case COMBAT_STEELDAMAGE:')
 write(game, gm)
+
+# Boost.Filesystem removed directory_entry::leaf(). filename().string() is the
+# direct modern equivalent and keeps the loader's sorting/filtering behavior.
+luascript = Path(sys.argv[11])
+ls = read(luascript)
+needle = 'std::string s = it->leaf();'
+if needle not in ls:
+    raise SystemExit('Could not locate legacy Boost filesystem leaf() call')
+write(luascript, ls.replace(needle, 'std::string s = it->path().filename().string();', 1))
 PY
 
 say "Generating build system..."
