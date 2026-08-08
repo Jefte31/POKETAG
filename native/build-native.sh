@@ -254,7 +254,21 @@ say "Configuring TFS 0.3.x for SQLite/local mode..."
 CXXFLAGS="${CXXFLAGS:--O2 -std=gnu++03}" ./configure --enable-sqlite
 
 say "Building..."
-make -j"${JOBS:-2}"
+BUILD_LOG="$BUILD_ROOT/build.log"
+# Single-job mode keeps the first compiler failure deterministic while we
+# modernize this old codebase. JOBS can still be overridden explicitly.
+if ! make -j"${JOBS:-1}" >"$BUILD_LOG" 2>&1; then
+  echo
+  echo "[POKETAG-NATIVE] Build failed. Compiler/linker errors:"
+  grep -n -E '(^|: )(fatal )?error:|undefined reference|collect2: error|make(\[[0-9]+\])?: \*\*\*' "$BUILD_LOG" | tail -n 100 || true
+  echo
+  echo "[POKETAG-NATIVE] Last 120 build log lines:"
+  tail -n 120 "$BUILD_LOG" || true
+  exit 1
+fi
+
+echo "[POKETAG-NATIVE] Build succeeded. Final build log lines:"
+tail -n 30 "$BUILD_LOG" || true
 
 BIN="$WORK/theforgottenserver"
 [[ -x "$BIN" ]] || { echo "Native server binary was not produced: $BIN" >&2; exit 1; }
