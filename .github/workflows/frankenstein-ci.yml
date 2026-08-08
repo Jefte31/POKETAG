@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ frankenstein-local-v1 ]
+    branches: [ main, frankenstein-local-v1 ]
 
 jobs:
   validate-local-runtime:
