@@ -22,7 +22,9 @@ python3 - \
   "$WORK/house.h" \
   "$WORK/chat.cpp" \
   "$WORK/condition.h" \
-  "$WORK/combat.cpp" <<'PY'
+  "$WORK/combat.cpp" \
+  "$WORK/condition.cpp" \
+  "$WORK/configmanager.cpp" <<'PY'
 from pathlib import Path
 import sys
 
@@ -140,6 +142,23 @@ new_block = '''\t\tconst Player* attackerPlayer = NULL;
 if old_block not in co:
     raise SystemExit('Could not locate malformed attackerPlayer block in combat.cpp')
 write(combat, co.replace(old_block, new_block, 1))
+
+# Typo in the fork prevents ConditionSpeed from compiling.
+condition_cpp = Path(sys.argv[7])
+cc = read(condition_cpp)
+needle = 'propWrifream.ADD_VALUE(minb);'
+if needle not in cc:
+    raise SystemExit('Could not locate ConditionSpeed serialization typo')
+write(condition_cpp, cc.replace(needle, 'propWriteStream.ADD_VALUE(minb);', 1))
+
+# This one line kept the pre-refactor Lua-state parameter while every nearby
+# config read uses the current member helper signature.
+configmanager = Path(sys.argv[8])
+cm = read(configmanager)
+needle = 'getGlobalNumber(L, "noDamageToSameColors", 0)'
+if needle not in cm:
+    raise SystemExit('Could not locate legacy getGlobalNumber call')
+write(configmanager, cm.replace(needle, 'getGlobalNumber("noDamageToSameColors", 0)', 1))
 PY
 
 say "Generating build system..."
