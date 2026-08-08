@@ -3,7 +3,7 @@ name: PokeTag Native Server CI
 on:
   workflow_dispatch:
   push:
-    branches: [ native-server-v1 ]
+    branches: [ native-server-v1, gameplay-test-v1 ]
     paths:
       - 'native/**'
       - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/Server Sources/**'
@@ -12,7 +12,7 @@ on:
       - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/data/**'
       - '.github/workflows/native-server-ci.yml'
   pull_request:
-    branches: [ main ]
+    branches: [ main, native-server-v1 ]
     paths:
       - 'native/**'
       - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/Server Sources/**'
@@ -26,6 +26,17 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate native/gameplay launchers
+        run: |
+          bash -n native/build-native.sh
+          bash -n native/prepare-runtime.sh
+          bash -n native/smoke-native.sh
+          bash -n native/poketag-native.sh
+          if [ -f native/poketag-play.sh ]; then
+            bash -n native/poketag-play.sh
+          fi
+          python3 -m py_compile native/*.py
 
       - name: Install native TFS build dependencies
         run: |
