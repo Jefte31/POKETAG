@@ -16,7 +16,7 @@ mkdir -p "$WORK" "$OUT"
 cp -a "$SRC/." "$WORK/"
 
 say "Applying local/native compatibility patches in build copy..."
-python3 - "$WORK/otserv.cpp" "$WORK/configure.ac" <<'PY'
+python3 - "$WORK/otserv.cpp" "$WORK/configure.ac" "$WORK/house.h" <<'PY'
 from pathlib import Path
 import sys
 
@@ -40,6 +40,16 @@ new = 'AC_CHECK_HEADERS([boost/unordered_set.hpp], , [AC_MSG_ERROR("boost::unord
 if old not in cfg:
     raise SystemExit('Could not locate legacy Boost unordered_set configure check')
 configure.write_text(cfg.replace(old, new), encoding='latin-1')
+
+house = Path(sys.argv[3])
+h = house.read_text(encoding='latin-1')
+old_include = '#include <boost/tr1/unordered_set.hpp>'
+old_type = 'typedef std::tr1::unordered_set<uint32_t> PlayerList;'
+if old_include not in h or old_type not in h:
+    raise SystemExit('Could not locate legacy TR1 unordered_set usage in house.h')
+h = h.replace(old_include, '#include <boost/unordered_set.hpp>')
+h = h.replace(old_type, 'typedef boost::unordered_set<uint32_t> PlayerList;')
+house.write_text(h, encoding='latin-1')
 PY
 
 say "Generating build system..."
