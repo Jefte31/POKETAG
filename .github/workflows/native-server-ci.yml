@@ -1,0 +1,65 @@
+name: PokeTag Native Server CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ native-server-v1 ]
+    paths:
+      - 'native/**'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/Server Sources/**'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/config.lua'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/forgottenserver.s3db'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/data/**'
+      - '.github/workflows/native-server-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'native/**'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/Server Sources/**'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/config.lua'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/forgottenserver.s3db'
+      - 'upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/data/**'
+      - '.github/workflows/native-server-ci.yml'
+
+jobs:
+  build-native-server:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native TFS build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential autoconf automake libtool pkg-config python3 \
+            libxml2-dev libgmp-dev liblua5.1-0-dev libsqlite3-dev iproute2 \
+            libboost-dev libboost-filesystem-dev libboost-date-time-dev \
+            libboost-system-dev libboost-regex-dev libboost-thread-dev
+
+      - name: Build native server
+        run: bash native/build-native.sh
+
+      - name: Inspect binary
+        run: |
+          file .poketag-native-build/bin/theforgottenserver
+          ldd .poketag-native-build/bin/theforgottenserver || true
+
+      - name: Prepare isolated runtime
+        run: bash native/prepare-runtime.sh
+
+      - name: Smoke test map, SQLite and ports
+        env:
+          SMOKE_TIMEOUT_SECONDS: '180'
+        run: bash native/smoke-native.sh
+
+      - name: Upload native server diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: poketag-native-${{ github.run_id }}
+          if-no-files-found: ignore
+          retention-days: 7
+          path: |
+            .poketag-native-build/bin/theforgottenserver
+            .poketag-native-build/runtime/config.lua
+            .poketag-native-build/server-smoke.log
