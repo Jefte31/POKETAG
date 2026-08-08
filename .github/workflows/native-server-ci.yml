@@ -27,13 +27,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install legacy TFS build dependencies
+      - name: Install native TFS build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential autoconf automake libtool pkg-config python3 \
-            libxml2-dev libgmp-dev libboost-all-dev liblua5.1-0-dev \
-            libsqlite3-dev iproute2
+            libxml2-dev libgmp-dev liblua5.1-0-dev libsqlite3-dev iproute2 \
+            libboost-dev libboost-filesystem-dev libboost-date-time-dev \
+            libboost-system-dev libboost-regex-dev libboost-thread-dev
 
       - name: Build native server
         run: bash native/build-native.sh
