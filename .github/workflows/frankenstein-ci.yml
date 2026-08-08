@@ -1,0 +1,35 @@
+name: PokeTag Frankenstein CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ frankenstein-local-v1 ]
+
+jobs:
+  validate-local-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate launcher syntax
+        run: bash -n poketag.sh
+
+      - name: Validate integration inputs
+        run: |
+          test -f "upstream/PDA-By-Slicer/extraidos/Serv Full v2.9/Serv Full v2.9/PO Dash World [Advanced] - GUI.exe"
+          test -f "upstream/PDA-By-Slicer/extraidos/OTClient v1.8/OTClient v1.8/otclient.exe"
+          test -f "upstream/PDA-By-Slicer/extraidos/Client v1.9 - v2.9/Client v1.9 - v2.9/POK.dat"
+          test -f "upstream/PDA-By-Slicer/extraidos/Client v1.9 - v2.9/Client v1.9 - v2.9/POK.spr"
+          test -f "upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/Server Sources/resources.h"
+          test -f "upstream/otclient-opentibiabr/data/things/854/Tibia.dat"
+          test -f "upstream/otclient-opentibiabr/data/things/854/Tibia.spr"
+
+      - name: Confirm protocol bridge is 8.54
+        run: |
+          grep -q "CLIENT_VERSION_MIN 854" "upstream/poketibia-sirninja/Servidor/Pokemon EX 2.0/Server Sources/resources.h"
+          grep -q "setUniqueServer('127.0.0.1', 7171, 854)" "upstream/otclient-opentibiabr/otclientrc.lua"
+
+      - name: Run launcher doctor
+        run: bash poketag.sh doctor
